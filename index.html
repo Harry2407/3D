@@ -1,138 +1,369 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>three.js examples</title>
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link rel="shortcut icon" href="../files/favicon.ico" />
+		<link rel="stylesheet" type="text/css" href="../files/main.css">
+	</head>
+	<body>
 
-<head>
-	<title>Final Rekayasa Sistem Multimedia 3D</title>
-<link rel="stylesheet" href="/assets/all.min.css">
-<link rel="stylesheet" href="/assets/bootstrap.min.css">
-<link rel="stylesheet" href="">
-</head>
+		<div id="panel">
 
-<body>
-	<div class="tm-header">
-		<div class="row tm-header-inner">
-			<div class="col-md-6 col-12">
-				<div class="tm-site-text-box">
-					<h1 class="tm-site-title">Nike Zoom Pegasus 36</h1>	
+			<div id="header">
+				<h1><a href="https://threejs.org">three.js</a></h1>
+
+				<div id="sections">
+					<a href="../docs/index.html#manual/introduction/Creating-a-scene">docs</a>
+					<span class="selected">examples</span>
+				</div>
+
+				<div id="expandButton"></div>
+			</div>
+
+			<div id="panelScrim"></div>
+
+			<div id="contentWrapper">
+
+				<div id="inputWrapper">
+					<input placeholder="" type="text" id="filterInput" autocorrect="off" autocapitalize="off" spellcheck="false" />
+					<div id="exitSearchButton"></div>
+				</div>
+
+				<div id="content">
+					<img id="previewsToggler" src="./files/thumbnails.svg" width="20" height="20" />
 				</div>
 			</div>
-			<nav class="col-md-6 col-12 tm-nav">
-				<ul class="tm-nav-ul">
-					<li class="tm-nav-li"><a href="index.html" class="tm-nav-link active">Home</a></li>
-			</nav>	
+
 		</div>
-	</div>
 
-	<script type="module">
+		<iframe id="viewer" name="viewer" allowfullscreen allowvr onmousewheel=""></iframe>
 
-		import * as THREE from './build/three.module.js';
+		<a id="button" target="_blank"><img src="../files/ic_code_black_24dp.svg"></a>
 
-		import { OrbitControls } from './jsm/controls/OrbitControls.js';
-		import { GLTFLoader } from './jsm/loaders/GLTFLoader.js';
-		import { RGBELoader } from './jsm/loaders/RGBELoader.js';
-		import { RoughnessMipmapper } from './jsm/utils/RoughnessMipmapper.js';
+		<script>
 
-		let camera, scene, renderer;
+		const panel = document.getElementById( 'panel' );
+		const content = document.getElementById( 'content' );
+		const viewer = document.getElementById( 'viewer' );
+		const filterInput = document.getElementById( 'filterInput' );
+		const exitSearchButton = document.getElementById( 'exitSearchButton' );
+		const expandButton = document.getElementById( 'expandButton' );
+		const viewSrcButton = document.getElementById( 'button' );
+		const panelScrim = document.getElementById( 'panelScrim' );
+
+		const previewsToggler = document.getElementById( 'previewsToggler' );
+
+		const links = {};
+		const validRedirects = new Map();
+		const container = document.createElement( 'div' );
+
+		let selected = null;
 
 		init();
-		render();
 
-		function init() {
+		async function init() {
 
-			const container = document.createElement('div');
-			document.body.appendChild(container);
+			content.appendChild( container );
 
-			camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 1, 2000);
-			camera.position.set(0, 50, 50);
+			viewSrcButton.style.display = 'none';
 
-			scene = new THREE.Scene();
+			const files = await ( await fetch( 'files.json' ) ).json();
+			const tags = await ( await fetch( 'tags.json' ) ).json();
 
-			new RGBELoader()
-				.setDataType(THREE.UnsignedByteType)
-				.setPath('./')
-				.load('royal_esplanade_1k.hdr', function (texture) {
+			for ( const key in files ) {
 
-					const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+				const section = files[ key ];
 
-					scene.background = envMap;
-					scene.environment = envMap;
+				const header = document.createElement( 'h2' );
+				header.textContent = key;
+				header.setAttribute( 'data-category', key );
+				container.appendChild( header );
 
-					texture.dispose();
-					pmremGenerator.dispose();
+				for ( let i = 0; i < section.length; i ++ ) {
 
-					render();
+					const file = section[ i ];
 
-					// model
+					const link = createLink( file );
+					container.appendChild( link );
 
-					// use of RoughnessMipmapper is optional
-					const roughnessMipmapper = new RoughnessMipmapper(renderer);
+					links[ file ] = link;
+					validRedirects.set( file, file + '.html' );
 
-					const loader = new GLTFLoader().setPath('./');
-					loader.load('scene.gltf', function (gltf) {
+				}
 
-						gltf.scene.traverse(function (child) {
+			}
 
-							if (child.isMesh) {
+			if ( window.location.hash !== '' ) {
 
-								// TOFIX RoughnessMipmapper seems to be broken with WebGL 2.0
-								// roughnessMipmapper.generateMipmaps( child.material );
+				const file = window.location.hash.substring( 1 );
 
-							}
+				// use a predefined map of redirects to avoid untrusted URL redirection due to user-provided value
 
-						});
+				if ( validRedirects.has( file ) === true ) {
 
-						scene.add(gltf.scene);
+					selectFile( file );
+					viewer.src = validRedirects.get( file );
 
-						roughnessMipmapper.dispose();
+				}
 
-						render();
+			}
 
-					});
+			filterInput.value = extractQuery();
 
-				});
+			if ( filterInput.value !== '' ) {
 
-			renderer = new THREE.WebGLRenderer({ antialias: true });
-			renderer.setPixelRatio(window.devicePixelRatio);
-			renderer.setSize(window.innerWidth, window.innerHeight);
-			renderer.toneMapping = THREE.ACESFilmicToneMapping;
-			renderer.toneMappingExposure = 1;
-			renderer.outputEncoding = THREE.sRGBEncoding;
-			container.appendChild(renderer.domElement);
+				panel.classList.add( 'searchFocused' );
 
-			const pmremGenerator = new THREE.PMREMGenerator(renderer);
-			pmremGenerator.compileEquirectangularShader();
+			}
 
-			const controls = new OrbitControls(camera, renderer.domElement);
-			controls.addEventListener('change', render); // use if there is no animation loop
-			controls.minDistance = 2;
-			controls.maxDistance = 10;
-			controls.target.set(0, 1, - 0.2);
-			controls.update();
+			updateFilter( files, tags );
 
-			window.addEventListener('resize', onWindowResize);
+			// Events
+
+			filterInput.onfocus = function ( ) {
+
+				panel.classList.add( 'searchFocused' );
+
+			};
+
+			filterInput.onblur = function ( ) {
+
+				if ( filterInput.value === '' ) {
+
+					panel.classList.remove( 'searchFocused' );
+
+				}
+
+			};
+
+			exitSearchButton.onclick = function ( ) {
+
+				filterInput.value = '';
+				updateFilter( files, tags );
+				panel.classList.remove( 'searchFocused' );
+
+			};
+
+			filterInput.addEventListener( 'input', function () {
+
+				updateFilter( files, tags );
+
+			} );
+
+
+			expandButton.addEventListener( 'click', function ( event ) {
+
+				event.preventDefault();
+				panel.classList.toggle( 'open' );
+
+			} );
+
+			panelScrim.onclick = function ( event ) {
+
+				event.preventDefault();
+				panel.classList.toggle( 'open' );
+
+			};
+
+			previewsToggler.onclick = function ( event ) {
+
+				event.preventDefault();
+				content.classList.toggle( 'minimal' );
+
+			};
+
+			// iOS iframe auto-resize workaround
+
+			if ( /(iPad|iPhone|iPod)/g.test( navigator.userAgent ) ) {
+
+				viewer.style.width = getComputedStyle( viewer ).width;
+				viewer.style.height = getComputedStyle( viewer ).height;
+				viewer.setAttribute( 'scrolling', 'no' );
+
+			}
 
 		}
 
-		function onWindowResize() {
+		function createLink( file ) {
 
-			camera.aspect = window.innerWidth / window.innerHeight;
-			camera.updateProjectionMatrix();
+			const template = `
+				<div class="card">
+					<a href="${file}.html" target="viewer">
+						<div class="cover">
+							<img src="screenshots/${ file }.jpg" loading="lazy" width="400" />
+						</div>
+						<div class="title">${getName( file )}</div>
+					</a>
+				</div>
+			`;
 
-			renderer.setSize(window.innerWidth, window.innerHeight);
+			const link = createElementFromHTML( template );
 
-			render();
+			link.querySelector( 'a[target="viewer"]' ).addEventListener( 'click', function ( event ) {
+
+				if ( event.button !== 0 || event.ctrlKey || event.altKey || event.metaKey ) return;
+
+				selectFile( file );
+
+			} );
+
+			return link;
 
 		}
 
-		//
+		function selectFile( file ) {
 
-		function render() {
+			if ( selected !== null ) links[ selected ].classList.remove( 'selected' );
 
-			renderer.render(scene, camera);
+			links[ file ].classList.add( 'selected' );
+
+			window.location.hash = file;
+			viewer.focus();
+
+			panel.classList.remove( 'open' );
+
+			selected = file;
+
+			// Reveal "View source" button and set attributes to this example
+			viewSrcButton.style.display = '';
+			viewSrcButton.href = 'https://github.com/mrdoob/three.js/blob/master/examples/' + selected + '.html';
+			viewSrcButton.title = 'View source code for ' + getName( selected ) + ' on GitHub';
 
 		}
 
-	</script>
-</body>
+		function updateFilter( files, tags ) {
 
+			let v = filterInput.value.trim();
+			v = v.replace( /\s+/gi, ' ' ); // replace multiple whitespaces with a single one
+
+			if ( v !== '' ) {
+
+				window.history.replaceState( {}, '', '?q=' + v + window.location.hash );
+
+			} else {
+
+				window.history.replaceState( {}, '', window.location.pathname + window.location.hash );
+
+			}
+
+			const exp = new RegExp( v, 'gi' );
+
+			for ( const key in files ) {
+
+				const section = files[ key ];
+
+				for ( let i = 0; i < section.length; i ++ ) {
+
+					filterExample( section[ i ], exp, tags );
+
+				}
+
+			}
+
+			layoutList( files );
+
+		}
+
+		function filterExample( file, exp, tags ) {
+
+			const link = links[ file ];
+			const name = getName( file );
+			if ( file in tags ) file += ' ' + tags[ file ].join( ' ' );
+			const res = file.match( exp );
+			let text;
+
+			if ( res && res.length > 0 ) {
+
+				link.classList.remove( 'hidden' );
+
+				for ( let i = 0; i < res.length; i ++ ) {
+
+					text = name.replace( res[ i ], '<b>' + res[ i ] + '</b>' );
+
+				}
+
+				link.querySelector( '.title' ).innerHTML = text;
+
+			} else {
+
+				link.classList.add( 'hidden' );
+				link.querySelector( '.title' ).innerHTML = name;
+
+			}
+
+		}
+
+		function getName( file ) {
+
+			const name = file.split( '_' );
+			name.shift();
+			return name.join( ' / ' );
+
+		}
+
+		function layoutList( files ) {
+
+			for ( const key in files ) {
+
+				let collapsed = true;
+
+				const section = files[ key ];
+
+				for ( let i = 0; i < section.length; i ++ ) {
+
+					const file = section[ i ];
+
+					if ( links[ file ].classList.contains( 'hidden' ) === false ) {
+
+						collapsed = false;
+						break;
+
+					}
+
+				}
+
+				const element = document.querySelector( 'h2[data-category="' + key + '"]' );
+
+				if ( collapsed ) {
+
+					element.classList.add( 'hidden' );
+
+				} else {
+
+					element.classList.remove( 'hidden' );
+
+				}
+
+			}
+
+		}
+
+		function extractQuery() {
+
+			const p = window.location.search.indexOf( '?q=' );
+
+			if ( p !== - 1 ) {
+
+				return decodeURI( window.location.search.substr( 3 ) );
+
+			}
+
+			return '';
+
+		}
+
+
+		function createElementFromHTML( htmlString ) {
+
+			const div = document.createElement( 'div' );
+			div.innerHTML = htmlString.trim();
+			return div.firstChild;
+
+		}
+
+		</script>
+
+	</body>
 </html>
